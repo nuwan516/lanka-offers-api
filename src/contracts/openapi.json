@@ -1,0 +1,243 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lanka Offers Public Consumer API",
+    "version": "1.0.0",
+    "description": "Production-grade, read-only consumer API serving verified Sri Lankan bank promotions."
+  },
+  "servers": [
+    {
+      "url": "https://api.lanka-offers.me",
+      "description": "Production API Server"
+    },
+    {
+      "url": "http://localhost:3001",
+      "description": "Local Development Server"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health and service status",
+        "responses": {
+          "200": {
+            "description": "Service health payload",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HealthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/offers": {
+      "get": {
+        "summary": "List published, non-expired offers with pagination and filters",
+        "parameters": [
+          { "name": "bank", "in": "query", "schema": { "type": "string" }, "description": "Filter by bank code (e.g. hnb, sampath)" },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Filter by category name (e.g. Dining)" },
+          { "name": "search", "in": "query", "schema": { "type": "string" }, "description": "Keyword search across title and merchant" },
+          { "name": "merchant", "in": "query", "schema": { "type": "string" }, "description": "Filter by merchant or canonical name" },
+          { "name": "locationScope", "in": "query", "schema": { "type": "string" }, "description": "Filter by location scope" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "maximum": 500 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated offer list",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaginatedOffers" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/offers/{id}": {
+      "get": {
+        "summary": "Get published offer details by UUID or unique_id",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Offer detail",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PublicOfferDetail" }
+              }
+            }
+          },
+          "404": {
+            "description": "Offer not found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/merchants": {
+      "get": {
+        "summary": "Directory of merchants and offer counts",
+        "responses": {
+          "200": {
+            "description": "List of merchants",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/MerchantSummary" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/banks": {
+      "get": {
+        "summary": "List supported banks and offer statistics",
+        "responses": {
+          "200": {
+            "description": "List of banks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/BankWithStats" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthResponse": {
+        "type": "object",
+        "required": ["status", "service", "version", "database", "timestamp", "uptimeSeconds"],
+        "properties": {
+          "status": { "type": "string", "enum": ["healthy", "degraded"] },
+          "service": { "type": "string" },
+          "version": { "type": "string" },
+          "database": { "type": "string", "enum": ["connected", "disconnected"] },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "uptimeSeconds": { "type": "integer" }
+        }
+      },
+      "CardEligibility": {
+        "type": "object",
+        "required": ["cardTypes", "networks", "includedCards", "excludedCards", "restrictions"],
+        "properties": {
+          "cardTypes": { "type": "array", "items": { "type": "string" } },
+          "networks": { "type": "array", "items": { "type": "string" } },
+          "includedCards": { "type": "array", "items": { "type": "string" } },
+          "excludedCards": { "type": "array", "items": { "type": "string" } },
+          "restrictions": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "GeoLocation": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "district": { "type": "string" },
+          "city": { "type": "string" },
+          "address": { "type": "string" },
+          "lat": { "type": "number" },
+          "lng": { "type": "number" },
+          "confidence": { "type": "number" }
+        }
+      },
+      "PublicOfferSummary": {
+        "type": "object",
+        "required": ["id", "unique_id", "bank", "title", "db_status", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "unique_id": { "type": "string" },
+          "bank": { "type": "string" },
+          "source_url": { "type": ["string", "null"] },
+          "title": { "type": "string" },
+          "category": { "type": ["string", "null"] },
+          "card_type": { "type": ["string", "null"] },
+          "merchant_name": { "type": ["string", "null"] },
+          "merchant_location": { "type": ["string", "null"] },
+          "canonical_merchant": { "type": ["string", "null"] },
+          "location_scope": { "type": ["string", "null"] },
+          "discount_percentage": { "type": ["string", "null"] },
+          "valid_from": { "type": ["string", "null"], "format": "date" },
+          "valid_to": { "type": ["string", "null"], "format": "date" },
+          "card_eligibility": { "$ref": "#/components/schemas/CardEligibility" },
+          "geo_locations": { "type": "array", "items": { "$ref": "#/components/schemas/GeoLocation" } },
+          "geo_status": { "type": ["string", "null"] },
+          "db_status": { "type": "string", "enum": ["PUBLISHED"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PublicOfferDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/PublicOfferSummary" },
+          {
+            "type": "object",
+            "properties": {
+              "raw_offer": { "type": "object" }
+            }
+          }
+        ]
+      },
+      "PaginatedOffers": {
+        "type": "object",
+        "required": ["items", "total", "limit", "offset"],
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/PublicOfferSummary" } },
+          "total": { "type": "integer" },
+          "limit": { "type": "integer" },
+          "offset": { "type": "integer" }
+        }
+      },
+      "MerchantSummary": {
+        "type": "object",
+        "required": ["name", "offer_count", "banks", "aliases"],
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": ["string", "null"] },
+          "offer_count": { "type": "integer" },
+          "banks": { "type": "array", "items": { "type": "string" } },
+          "aliases": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "BankWithStats": {
+        "type": "object",
+        "required": ["code", "name", "cardTypesSupported", "activeOfferCount"],
+        "properties": {
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "cardTypesSupported": { "type": "array", "items": { "type": "string", "enum": ["credit", "debit"] } },
+          "activeOfferCount": { "type": "integer" }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "correlationId": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

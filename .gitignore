@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Production build output
+dist/
+
+# Logs & scratch
+logs/
+*.log
+npm-debug.log*
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Security & Keys
+*.key
+*.pem
+*.p12
+*.pfx
+ssh-key*
+
+# Test coverage & caches
+coverage/
+.turbo/
+.cache/
+
+# OS and IDE caches
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

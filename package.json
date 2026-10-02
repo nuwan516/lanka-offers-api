@@ -1,0 +1,38 @@
+{
+  "name": "lanka-offers-backend-api",
+  "version": "1.0.0",
+  "description": "Lanka Offers Public Consumer Backend API — High-performance, read-oriented, sanitized REST service",
+  "main": "dist/app/server.js",
+  "scripts": {
+    "dev": "ts-node -r tsconfig-paths/register src/app/server.ts",
+    "build": "tsc",
+    "start": "node dist/app/server.js",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts'",
+    "test": "jest --passWithNoTests",
+    "test:unit": "jest tests/unit --passWithNoTests",
+    "test:integration": "jest tests/integration --passWithNoTests",
+    "test:contract": "jest tests/contract --passWithNoTests"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.5",
+    "@types/pg": "^8.11.5",
+    "@types/supertest": "^6.0.2",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.3.3"
+  }
+}
