@@ -62,6 +62,39 @@ describe('OfferRepository Unit Tests', () => {
     });
   });
 
+  describe('findNearbyOffers', () => {
+    it('should query unnested geo_locations with Haversine distance and order by distance_km ASC', async () => {
+      (db.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ id: 'offer-1', title: 'Nearby Offer', distance_km: 1.2 }] })
+        .mockResolvedValueOnce({ rows: [{ count: 1 }] });
+
+      const result = await repository.findNearbyOffers({
+        lat: 6.9271,
+        lng: 79.8612,
+        radius: 15,
+        bank: 'hnb',
+        category: 'dining',
+        search: 'keells',
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].distance_km).toBe(1.2);
+
+      const firstCallArgs = (db.query as jest.Mock).mock.calls[0];
+      const sql = firstCallArgs[0];
+      const params = firstCallArgs[1];
+
+      expect(sql).toContain('6371 * acos');
+      expect(sql).toContain('ORDER BY distance_km ASC');
+      expect(sql).toContain('o.bank = $4');
+      expect(sql).toContain('o.category ILIKE $5');
+      expect(params).toEqual([6.9271, 79.8612, 15, 'hnb', 'dining', '%keells%', 10, 0]);
+    });
+  });
+
   describe('findPublishedOfferById', () => {
     it('should query both id and unique_id when given a valid UUID', async () => {
       const mockUuid = '12345678-1234-1234-1234-123456789abc';
@@ -92,3 +125,4 @@ describe('OfferRepository Unit Tests', () => {
     });
   });
 });
+

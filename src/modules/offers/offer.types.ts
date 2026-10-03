@@ -35,11 +35,14 @@ export interface PublicOfferSummary {
   geo_locations: GeoLocationDto[];
   geo_status: string | null;
   db_status: 'PUBLISHED';
+  description?: string | null;
+  distance_km?: number | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface PublicOfferDetail extends PublicOfferSummary {
+  terms?: string | null;
   raw_offer?: Record<string, unknown>;
 }
 
@@ -49,6 +52,17 @@ export interface OfferListQueryOptions {
   search?: string;
   merchant?: string;
   locationScope?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface NearbyOffersQueryOptions {
+  lat: number;
+  lng: number;
+  radius?: number;
+  bank?: string;
+  category?: string;
+  search?: string;
   limit?: number;
   offset?: number;
 }

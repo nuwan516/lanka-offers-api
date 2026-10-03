@@ -8,6 +8,10 @@ router.get('/offers', (req, res, next) => {
   controller.getOffers(req, res).catch(next);
 });
 
+router.get('/offers/nearby', (req, res, next) => {
+  controller.getNearbyOffers(req, res).catch(next);
+});
+
 router.get('/offers/:id', (req, res, next) => {
   controller.getOfferById(req, res).catch(next);
 });

@@ -20,6 +20,27 @@ export class OfferController {
     res.json(result);
   }
 
+  public async getNearbyOffers(req: Request, res: Response): Promise<void> {
+    const { lat, lng, radius, bank, category, search, limit, offset } = req.query;
+
+    const latNum = typeof lat === 'string' ? parseFloat(lat) : NaN;
+    const lngNum = typeof lng === 'string' ? parseFloat(lng) : NaN;
+    const radiusNum = typeof radius === 'string' ? parseFloat(radius) : undefined;
+
+    const result = await this.service.getNearbyOffers({
+      lat: latNum,
+      lng: lngNum,
+      radius: radiusNum,
+      bank: typeof bank === 'string' ? bank : undefined,
+      category: typeof category === 'string' ? category : undefined,
+      search: typeof search === 'string' ? search : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+      offset: offset ? parseInt(offset as string, 10) : undefined,
+    });
+
+    res.json(result);
+  }
+
   public async getOfferById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
     const offer = await this.service.getPublishedOfferById(id);
