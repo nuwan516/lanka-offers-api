@@ -232,9 +232,7 @@ export class OfferRepository {
   public async findPublishedOfferById(idOrUniqueId: string): Promise<PublicOfferDetail | null> {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrUniqueId);
     
-    const condition = isUuid
-      ? '(id = $1 OR unique_id = $1)'
-      : 'unique_id = $1';
+    const condition = isUuid ? 'id = $1' : 'unique_id = $1';
 
     const sql = `
       SELECT ${PUBLIC_DETAIL_COLUMNS}

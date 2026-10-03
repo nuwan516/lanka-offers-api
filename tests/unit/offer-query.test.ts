@@ -106,7 +106,7 @@ describe('OfferRepository Unit Tests', () => {
 
       expect(offer).not.toBeNull();
       const callArgs = (db.query as jest.Mock).mock.calls[0];
-      expect(callArgs[0]).toContain('(id = $1 OR unique_id = $1)');
+      expect(callArgs[0]).toContain('id = $1');
       expect(callArgs[1]).toEqual([mockUuid]);
     });
 
