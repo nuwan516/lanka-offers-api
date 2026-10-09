@@ -60,10 +60,20 @@ export class OfferRepository {
     }
 
     if (options.merchant) {
-      conditions.push(`(merchant_name ILIKE $${paramIndex} OR canonical_merchant ILIKE $${paramIndex})`);
-      params.push(`%${options.merchant}%`);
-      paramIndex++;
+      const merchantClean = options.merchant.trim();
+      conditions.push(
+        `(
+          LOWER(COALESCE(canonical_merchant, merchant_name)) = LOWER($${paramIndex})
+          OR LOWER(canonical_merchant) = LOWER($${paramIndex})
+          OR LOWER(merchant_name) = LOWER($${paramIndex})
+          OR canonical_merchant ILIKE $${paramIndex + 1}
+          OR merchant_name ILIKE $${paramIndex + 1}
+        )`
+      );
+      params.push(merchantClean, `%${merchantClean}%`);
+      paramIndex += 2;
     }
+
 
     if (options.search) {
       conditions.push(

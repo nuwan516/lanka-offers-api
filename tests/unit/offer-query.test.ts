@@ -47,6 +47,27 @@ describe('OfferRepository Unit Tests', () => {
       expect(params).toEqual(['hnb', 'dining', '%keells%', 10, 0]);
     });
 
+    it('should filter by merchant using exact and ILIKE parameters', async () => {
+      (db.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [{ id: '1', title: 'Pizza Offer' }] })
+        .mockResolvedValueOnce({ rows: [{ count: 1 }] });
+
+      const result = await repository.findPublishedOffers({
+        merchant: 'Pizza Hut',
+        limit: 10,
+        offset: 0,
+      });
+
+      expect(result.total).toBe(1);
+      const firstCallArgs = (db.query as jest.Mock).mock.calls[0];
+      const sql = firstCallArgs[0];
+      const params = firstCallArgs[1];
+
+      expect(sql).toContain('LOWER(COALESCE(canonical_merchant, merchant_name)) = LOWER($1)');
+      expect(sql).toContain('canonical_merchant ILIKE $2');
+      expect(params).toEqual(['Pizza Hut', '%Pizza Hut%', 10, 0]);
+    });
+
     it('should cap limit at maximum allowed pagination boundary', async () => {
       (db.query as jest.Mock)
         .mockResolvedValueOnce({ rows: [] })
@@ -61,6 +82,7 @@ describe('OfferRepository Unit Tests', () => {
       expect(params[params.length - 1]).toBe(0);
     });
   });
+
 
   describe('findNearbyOffers', () => {
     it('should query unnested geo_locations with Haversine distance and order by distance_km ASC', async () => {
