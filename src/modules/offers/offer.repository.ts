@@ -132,10 +132,15 @@ export class OfferRepository {
       "o.db_status = 'PUBLISHED'",
       "(o.valid_to IS NULL OR o.valid_to >= CURRENT_DATE)",
       "o.geo_locations IS NOT NULL",
+      "jsonb_typeof(o.geo_locations) = 'array'",
       "jsonb_array_length(o.geo_locations) > 0",
-      "(loc->>'lat') IS NOT NULL",
-      "(loc->>'lng') IS NOT NULL",
     ];
+
+    if (options.includeNationwide) {
+      conditions.push("(o.location_scope IS NULL OR o.location_scope NOT IN ('ONLINE', 'UNRESOLVED'))");
+    } else {
+      conditions.push("(o.location_scope IS NULL OR o.location_scope NOT IN ('ONLINE', 'UNRESOLVED', 'NATIONWIDE'))");
+    }
 
     const params: unknown[] = [options.lat, options.lng, radius];
     let paramIndex = 4;
@@ -161,7 +166,7 @@ export class OfferRepository {
     const whereSql = `WHERE ${conditions.join(' AND ')}`;
 
     const dataSql = `
-      WITH unnested_locations AS (
+      WITH valid_branches AS (
         SELECT 
           o.id, o.unique_id, o.bank, o.source_url, o.title, o.category, o.card_type,
           o.merchant_name, o.merchant_location, o.canonical_merchant, o.location_scope,
@@ -171,58 +176,109 @@ export class OfferRepository {
             SUBSTRING(o.raw_offer->'offer'->>'description' FROM 1 FOR 200),
             o.title
           ) AS description,
-          (
-            6371 * acos(
-              least(1.0, greatest(-1.0,
-                cos(radians($1)) * cos(radians((loc->>'lat')::float)) *
-                cos(radians((loc->>'lng')::float) - radians($2)) +
-                sin(radians($1)) * sin(radians((loc->>'lat')::float))
-              ))
-            )
-          ) AS dist_km
+          loc->>'name' AS branch_name,
+          loc->>'address' AS branch_address,
+          CASE 
+            WHEN jsonb_typeof(loc) = 'object' 
+              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+            THEN (loc->>'lat')::float
+            ELSE NULL
+          END AS branch_lat,
+          CASE 
+            WHEN jsonb_typeof(loc) = 'object' 
+              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+            THEN (loc->>'lng')::float
+            ELSE NULL
+          END AS branch_lng
         FROM offers o,
         jsonb_array_elements(o.geo_locations) AS loc
         ${whereSql}
       ),
-      aggregated AS (
-        SELECT 
+      bounded_branches AS (
+        SELECT *,
+          (
+            6371 * acos(
+              least(1.0, greatest(-1.0,
+                cos(radians($1)) * cos(radians(branch_lat)) *
+                cos(radians(branch_lng) - radians($2)) +
+                sin(radians($1)) * sin(radians(branch_lat))
+              ))
+            )
+          ) AS dist_km
+        FROM valid_branches
+        WHERE branch_lat IS NOT NULL
+          AND branch_lng IS NOT NULL
+          AND branch_lat BETWEEN -90.0 AND 90.0
+          AND branch_lng BETWEEN -180.0 AND 180.0
+          AND branch_lat BETWEEN ($1 - ($3 / 111.0)) AND ($1 + ($3 / 111.0))
+          AND branch_lng BETWEEN ($2 - ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
+                             AND ($2 + ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
+      ),
+      nearest_per_offer AS (
+        SELECT DISTINCT ON (id)
           id, unique_id, bank, source_url, title, category, card_type,
           merchant_name, merchant_location, canonical_merchant, location_scope,
           discount_percentage, valid_from, valid_to, card_eligibility,
           geo_locations, geo_status, db_status, description, created_at, updated_at,
-          ROUND(MIN(dist_km)::numeric, 1)::float AS distance_km
-        FROM unnested_locations
+          ROUND(dist_km::numeric, 1)::float AS distance_km,
+          branch_name AS matched_branch_name,
+          branch_address AS matched_branch_address
+        FROM bounded_branches
         WHERE dist_km <= $3
-        GROUP BY id, unique_id, bank, source_url, title, category, card_type,
-                 merchant_name, merchant_location, canonical_merchant, location_scope,
-                 discount_percentage, valid_from, valid_to, card_eligibility,
-                 geo_locations, geo_status, db_status, description, created_at, updated_at
+        ORDER BY id, dist_km ASC
       )
       SELECT *
-      FROM aggregated
-      ORDER BY distance_km ASC
+      FROM nearest_per_offer
+      ORDER BY distance_km ASC, id ASC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
 
     const countSql = `
-      WITH unnested_locations AS (
+      WITH valid_branches AS (
         SELECT 
           o.id,
-          (
-            6371 * acos(
-              least(1.0, greatest(-1.0,
-                cos(radians($1)) * cos(radians((loc->>'lat')::float)) *
-                cos(radians((loc->>'lng')::float) - radians($2)) +
-                sin(radians($1)) * sin(radians((loc->>'lat')::float))
-              ))
-            )
-          ) AS dist_km
+          CASE 
+            WHEN jsonb_typeof(loc) = 'object' 
+              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+            THEN (loc->>'lat')::float
+            ELSE NULL
+          END AS branch_lat,
+          CASE 
+            WHEN jsonb_typeof(loc) = 'object' 
+              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
+            THEN (loc->>'lng')::float
+            ELSE NULL
+          END AS branch_lng
         FROM offers o,
         jsonb_array_elements(o.geo_locations) AS loc
         ${whereSql}
+      ),
+      bounded_branches AS (
+        SELECT id,
+          (
+            6371 * acos(
+              least(1.0, greatest(-1.0,
+                cos(radians($1)) * cos(radians(branch_lat)) *
+                cos(radians(branch_lng) - radians($2)) +
+                sin(radians($1)) * sin(radians(branch_lat))
+              ))
+            )
+          ) AS dist_km
+        FROM valid_branches
+        WHERE branch_lat IS NOT NULL
+          AND branch_lng IS NOT NULL
+          AND branch_lat BETWEEN -90.0 AND 90.0
+          AND branch_lng BETWEEN -180.0 AND 180.0
+          AND branch_lat BETWEEN ($1 - ($3 / 111.0)) AND ($1 + ($3 / 111.0))
+          AND branch_lng BETWEEN ($2 - ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
+                             AND ($2 + ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
       )
       SELECT COUNT(DISTINCT id)::int AS count
-      FROM unnested_locations
+      FROM bounded_branches
       WHERE dist_km <= $3
     `;
 

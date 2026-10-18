@@ -108,12 +108,31 @@ describe('OfferRepository Unit Tests', () => {
       const firstCallArgs = (db.query as jest.Mock).mock.calls[0];
       const sql = firstCallArgs[0];
       const params = firstCallArgs[1];
-
       expect(sql).toContain('6371 * acos');
-      expect(sql).toContain('ORDER BY distance_km ASC');
+      expect(sql).toContain('ORDER BY distance_km ASC, id ASC');
+      expect(sql).toContain("o.location_scope NOT IN ('ONLINE', 'UNRESOLVED', 'NATIONWIDE')");
+      expect(sql).toContain("(loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'");
+      expect(sql).toContain("branch_lat BETWEEN ($1 - ($3 / 111.0)) AND ($1 + ($3 / 111.0))");
       expect(sql).toContain('o.bank = $4');
       expect(sql).toContain('o.category ILIKE $5');
       expect(params).toEqual([6.9271, 79.8612, 15, 'hnb', 'dining', '%keells%', 10, 0]);
+    });
+
+    it('should include nationwide offers when includeNationwide is enabled', async () => {
+      (db.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: 0 }] });
+
+      await repository.findNearbyOffers({
+        lat: 6.9271,
+        lng: 79.8612,
+        includeNationwide: true,
+      });
+
+      const firstCallArgs = (db.query as jest.Mock).mock.calls[0];
+      const sql = firstCallArgs[0];
+      expect(sql).toContain("o.location_scope NOT IN ('ONLINE', 'UNRESOLVED')");
+      expect(sql).not.toContain("'NATIONWIDE'");
     });
   });
 

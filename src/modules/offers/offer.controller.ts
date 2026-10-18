@@ -21,11 +21,12 @@ export class OfferController {
   }
 
   public async getNearbyOffers(req: Request, res: Response): Promise<void> {
-    const { lat, lng, radius, bank, category, search, limit, offset } = req.query;
+    const { lat, lng, radius, bank, category, search, includeNationwide, limit, offset } = req.query;
 
     const latNum = typeof lat === 'string' ? parseFloat(lat) : NaN;
     const lngNum = typeof lng === 'string' ? parseFloat(lng) : NaN;
     const radiusNum = typeof radius === 'string' ? parseFloat(radius) : undefined;
+    const inclNationwide = includeNationwide === 'true' || includeNationwide === '1';
 
     const result = await this.service.getNearbyOffers({
       lat: latNum,
@@ -34,6 +35,7 @@ export class OfferController {
       bank: typeof bank === 'string' ? bank : undefined,
       category: typeof category === 'string' ? category : undefined,
       search: typeof search === 'string' ? search : undefined,
+      includeNationwide: inclNationwide,
       limit: limit ? parseInt(limit as string, 10) : undefined,
       offset: offset ? parseInt(offset as string, 10) : undefined,
     });

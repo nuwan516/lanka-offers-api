@@ -37,6 +37,8 @@ export interface PublicOfferSummary {
   db_status: 'PUBLISHED';
   description?: string | null;
   distance_km?: number | null;
+  matched_branch_name?: string | null;
+  matched_branch_address?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -63,6 +65,7 @@ export interface NearbyOffersQueryOptions {
   bank?: string;
   category?: string;
   search?: string;
+  includeNationwide?: boolean;
   limit?: number;
   offset?: number;
 }
