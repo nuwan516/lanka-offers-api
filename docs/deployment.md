@@ -66,8 +66,12 @@ This outputs compiled JavaScript to `dist/`.
 Use PM2 to ensure high availability, automatic restarts, and clustering:
 
 ```bash
-# Start or reload via PM2
-pm2 start dist/app/server.js --name "lanka-offers-public-api" -i max
+# Start or reload via PM2 ecosystem
+pm2 start ecosystem.config.js --env production
+pm2 save
+
+# Or direct CLI start
+pm2 start dist/app/server.js --name "lanka-offers-api" -i max
 pm2 save
 ```
 
@@ -90,9 +94,11 @@ Expected response:
 
 ---
 
-## Zero-Downtime Rollback Procedure
+## Controlled Rollback Procedure
 
 If a deployed version exhibits anomalies:
-1. Revert to the previous build directory or git tag.
-2. Run `pm2 reload lanka-offers-public-api`.
-3. Verify `/api/health` returns HTTP 200 within 5 seconds.
+1. Revert to the previous build directory or git release commit.
+2. Restore `.env.pre-cutover`.
+3. Run `pm2 reload ecosystem.config.js --env production` (or `pm2 restart lanka-offers-api`).
+4. Verify `/api/health` returns HTTP 200 within 5 seconds.
+*Note: Service rollback preserves the database role intact and does not execute destructive DDL.*

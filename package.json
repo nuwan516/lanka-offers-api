@@ -12,7 +12,10 @@
     "test": "jest --passWithNoTests",
     "test:unit": "jest tests/unit --passWithNoTests",
     "test:integration": "jest tests/integration --passWithNoTests",
-    "test:contract": "jest tests/contract --passWithNoTests"
+    "test:contract": "jest tests/contract --passWithNoTests",
+    "preflight:cutover": "ts-node -r tsconfig-paths/register scripts/preflight_security_cutover.ts",
+    "verify:cutover": "ts-node -r tsconfig-paths/register scripts/post_cutover_verification.ts",
+    "verify:privilege": "ts-node -r tsconfig-paths/register scripts/verify_least_privilege.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -16,7 +16,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const connectionString = process.env.TEST_READONLY_DATABASE_URL || process.env.DATABASE_URL;
+const connectionString =
+  process.env.TEST_READONLY_DATABASE_URL ||
+  process.env.DATABASE_PUBLIC_URL ||
+  process.env.DATABASE_URL;
 
 if (!connectionString) {
   console.error('[FAIL] No database connection string configured in environment.');
@@ -68,34 +71,57 @@ async function runVerification() {
       allPassed = false;
     }
 
-    // 4. Unauthorized write: INSERT into offers
-    try {
-      await client.query(
-        "INSERT INTO offers (unique_id, bank, title, raw_offer) VALUES ('test-privilege-check', 'test', 'Test', '{}')"
-      );
-      console.warn('[FAIL] Test 3: Unauthorized INSERT into offers SUCCEEDED (User has WRITE permissions!).');
+    // 4. Non-mutating catalog privilege boundary checks (has_table_privilege)
+    const catalogPrivRes = await client.query(`
+      SELECT 
+        has_table_privilege(CURRENT_USER, 'public.offers', 'INSERT') AS can_insert_offers,
+        has_table_privilege(CURRENT_USER, 'public.offers', 'UPDATE') AS can_update_offers,
+        has_table_privilege(CURRENT_USER, 'public.offers', 'DELETE') AS can_delete_offers,
+        has_table_privilege(CURRENT_USER, 'public.geo_cache', 'INSERT') AS can_insert_geo,
+        has_table_privilege(CURRENT_USER, 'public.bank_parser_rules', 'SELECT') AS can_select_rules,
+        has_table_privilege(CURRENT_USER, 'public.internal_audit', 'SELECT') AS can_select_audit,
+        has_schema_privilege(CURRENT_USER, 'public', 'CREATE') AS can_create_schema
+    `);
+    const cp = catalogPrivRes.rows[0];
+
+    // 4a. Mutation Denial: INSERT offers
+    if (!cp.can_insert_offers) {
+      console.log('[PASS] Test 3a: Catalog check confirmed: has_table_privilege for INSERT on offers is FALSE.');
+    } else {
+      console.warn('[FAIL] Test 3a: Elevated privilege detected: User has INSERT on offers.');
       allPassed = false;
-    } catch (e) {
-      const err = e as { code?: string; message: string };
-      if (err.code === '42501' || err.message.includes('permission denied')) {
-        console.log('[PASS] Test 3: Unauthorized INSERT rejected with "permission denied" (code 42501).');
-      } else {
-        console.log(`[INFO] Test 3: INSERT rejected with: ${err.message}`);
-      }
     }
 
-    // 5. Unauthorized read from operational tables (scrape_runs)
-    try {
-      await client.query('SELECT COUNT(*) FROM scrape_runs');
-      console.warn('[FAIL] Test 4: Unauthorized SELECT from scrape_runs SUCCEEDED (Internal operational tables are exposed!).');
+    // 4b. Mutation Denial: UPDATE offers
+    if (!cp.can_update_offers) {
+      console.log('[PASS] Test 3b: Catalog check confirmed: has_table_privilege for UPDATE on offers is FALSE.');
+    } else {
+      console.warn('[FAIL] Test 3b: Elevated privilege detected: User has UPDATE on offers.');
       allPassed = false;
-    } catch (e) {
-      const err = e as { code?: string; message: string };
-      if (err.code === '42501' || err.message.includes('permission denied')) {
-        console.log('[PASS] Test 4: Unauthorized SELECT from scrape_runs rejected with "permission denied" (code 42501).');
-      } else {
-        console.log(`[INFO] Test 4: SELECT rejected with: ${err.message}`);
-      }
+    }
+
+    // 4c. Mutation Denial: DELETE offers
+    if (!cp.can_delete_offers) {
+      console.log('[PASS] Test 3c: Catalog check confirmed: has_table_privilege for DELETE on offers is FALSE.');
+    } else {
+      console.warn('[FAIL] Test 3c: Elevated privilege detected: User has DELETE on offers.');
+      allPassed = false;
+    }
+
+    // 5. Table Isolation: Sensitive administrative tables
+    if (!cp.can_select_rules && !cp.can_select_audit) {
+      console.log('[PASS] Test 4: Catalog check confirmed: SELECT denied on bank_parser_rules & internal_audit.');
+    } else {
+      console.warn('[FAIL] Test 4: Elevated privilege detected: User can read sensitive administrative tables.');
+      allPassed = false;
+    }
+
+    // 6. Schema Mutation Denial: CREATE on schema public
+    if (!cp.can_create_schema) {
+      console.log('[PASS] Test 5: Catalog check confirmed: CREATE privilege on schema public is FALSE.');
+    } else {
+      console.warn('[FAIL] Test 5: Elevated privilege detected: User can CREATE objects in public schema.');
+      allPassed = false;
     }
 
     if (allPassed) {

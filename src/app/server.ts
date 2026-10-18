@@ -1,11 +1,16 @@
 import { createApp } from './app';
-import { config } from '../config/env';
+import { config, maskConnectionString } from '../config/env';
 import { db } from '../database/db-client';
 
 const app = createApp();
 
 const server = app.listen(config.port, () => {
   console.log(`[LankaOffers Backend API] Listening on port ${config.port} (${config.env})`);
+  if (config.isDesignatedPublicUrl) {
+    console.log(`[LankaOffers Backend API] Database security: Restricted public role active (${maskConnectionString(config.databaseUrl)})`);
+  } else {
+    console.log(`[LankaOffers Backend API] Database security: Local/fallback connection (${maskConnectionString(config.databaseUrl)})`);
+  }
   console.log(`[LankaOffers Backend API] Health check: http://localhost:${config.port}/api/health`);
   console.log(`[LankaOffers Backend API] Offers: http://localhost:${config.port}/api/offers`);
 });

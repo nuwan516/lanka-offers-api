@@ -134,5 +134,21 @@ describe('Geospatial Query Correctness & Robustness (Batch A)', () => {
       const dataSql = (db.query as jest.Mock).mock.calls[0][0];
       expect(dataSql).toContain("o.location_scope NOT IN ('ONLINE', 'UNRESOLVED', 'NATIONWIDE')");
     });
+
+    it('safely clamps latitude between -89.0 and 89.0 degrees to prevent division by zero near poles (E1)', async () => {
+      (db.query as jest.Mock)
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: 0 }] });
+
+      await repository.findNearbyOffers({
+        lat: 89.5, // Extreme high latitude edge case
+        lng: 0.0,
+        radius: 50,
+      });
+
+      const dataSql = (db.query as jest.Mock).mock.calls[0][0];
+      expect(dataSql).toContain('least(89.0, greatest(-89.0, $1))');
+      expect(dataSql).toContain('greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1)))))');
+    });
   });
 });

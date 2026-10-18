@@ -5,11 +5,11 @@
 -- Target DB: Neon Lakebase PostgreSQL (neondb)
 -- =============================================================================
 
--- Step 1: Idempotently create the role if it does not already exist
+-- Step 1: Idempotently create the role if it does not already exist,
+-- or align privileges if it was previously created
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'lanka_offers_public_api') THEN
-    -- Password must be replaced with a secure secret before running in production
     CREATE ROLE lanka_offers_public_api WITH
       LOGIN
       NOSUPERUSER
@@ -18,13 +18,29 @@ BEGIN
       NOINHERIT
       CONNECTION LIMIT 50
       PASSWORD 'REPLACE_WITH_STRONG_RANDOM_PASSWORD';
+  ELSE
+    ALTER ROLE lanka_offers_public_api WITH
+      LOGIN
+      NOSUPERUSER
+      NOCREATEDB
+      NOCREATEROLE
+      NOINHERIT
+      CONNECTION LIMIT 50;
   END IF;
 END
 $$;
 
+-- NOTE FOR OPERATOR: Replace <STRONG_PASSWORD> below with a secure 32+ character random secret:
+-- ALTER ROLE lanka_offers_public_api WITH PASSWORD '<STRONG_PASSWORD>';
+
 -- Step 2: Grant connection and schema usage
 GRANT CONNECT ON DATABASE neondb TO lanka_offers_public_api;
 GRANT USAGE ON SCHEMA public TO lanka_offers_public_api;
+REVOKE CREATE ON SCHEMA public FROM lanka_offers_public_api;
+REVOKE TEMPORARY ON DATABASE neondb FROM lanka_offers_public_api;
+
+-- Pin search_path to prevent schema hijacking
+ALTER ROLE lanka_offers_public_api SET search_path = public;
 
 -- Step 3: Revoke all default table permissions in public schema
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM lanka_offers_public_api;
