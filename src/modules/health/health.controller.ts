@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db } from '../../database/db-client';
+import { db } from '../../infrastructure/db/db-client';
 
 export class HealthController {
   public async getHealth(_req: Request, res: Response): Promise<void> {

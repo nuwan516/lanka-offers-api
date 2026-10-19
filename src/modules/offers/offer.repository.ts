@@ -1,4 +1,4 @@
-import { db } from '../../database/db-client';
+import { db } from '../../infrastructure/db/db-client';
 import { PAGINATION } from '../../config/constants';
 import {
   NearbyOffersQueryOptions,

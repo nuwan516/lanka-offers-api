@@ -1,9 +1,9 @@
 import { OfferRepository } from '../../src/modules/offers/offer.repository';
 import { MerchantRepository } from '../../src/modules/merchants/merchant.repository';
 import { BankService } from '../../src/modules/banks/bank.service';
-import { db } from '../../src/database/db-client';
+import { db } from '../../src/infrastructure/db/db-client';
 
-jest.mock('../../src/database/db-client', () => ({
+jest.mock('../../src/infrastructure/db/db-client', () => ({
   db: {
     query: jest.fn(),
     checkHealth: jest.fn(),

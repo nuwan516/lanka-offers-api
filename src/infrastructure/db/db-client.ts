@@ -1,5 +1,5 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
-import { config } from '../config/env';
+import { config } from '../../config/env';
 
 export class DatabaseClient {
   private static instance: DatabaseClient;

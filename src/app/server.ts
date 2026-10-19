@@ -1,6 +1,6 @@
 import { createApp } from './app';
 import { config, maskConnectionString } from '../config/env';
-import { db } from '../database/db-client';
+import { db } from '../infrastructure/db/db-client';
 
 const app = createApp();
 

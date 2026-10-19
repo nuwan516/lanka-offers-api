@@ -39,7 +39,7 @@ Service Layer (`src/modules/<feature>/*.service.ts`)
      ↓
 Repository Layer (`src/modules/<feature>/*.repository.ts`)
      ↓
-PostgreSQL (`src/database/db-client.ts`)
+PostgreSQL (`src/infrastructure/db/db-client.ts`)
 ```
 
 ### Directory Structure

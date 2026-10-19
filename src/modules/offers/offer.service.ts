@@ -6,7 +6,7 @@ import {
   PublicOfferDetail,
   PublicOfferSummary,
 } from './offer.types';
-import { AppError } from '../../middleware/error-handler';
+import { AppError } from '../../shared/middleware/error-handler';
 import { ERROR_CODES } from '../../config/constants';
 
 export class OfferService {

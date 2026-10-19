@@ -19,9 +19,9 @@ import {
 } from '../../src/config/env';
 import request from 'supertest';
 import { createApp } from '../../src/app/app';
-import { db } from '../../src/database/db-client';
+import { db } from '../../src/infrastructure/db/db-client';
 
-jest.mock('../../src/database/db-client', () => ({
+jest.mock('../../src/infrastructure/db/db-client', () => ({
   db: {
     query: jest.fn(),
     checkHealth: jest.fn(),

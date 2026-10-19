@@ -1,8 +1,8 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import { config } from '../config/env';
-import { correlationIdMiddleware } from '../middleware/correlation-id';
-import { errorHandler, AppError } from '../middleware/error-handler';
+import { correlationIdMiddleware } from '../shared/middleware/correlation-id';
+import { errorHandler, AppError } from '../shared/middleware/error-handler';
 import { healthRoutes } from '../modules/health/health.routes';
 import { offerRoutes } from '../modules/offers/offer.routes';
 import { merchantRoutes } from '../modules/merchants/merchant.routes';

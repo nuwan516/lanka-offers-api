@@ -1,5 +1,5 @@
 import { BankMetadata, SUPPORTED_BANKS } from '../../config/constants';
-import { db } from '../../database/db-client';
+import { db } from '../../infrastructure/db/db-client';
 
 export interface BankWithStats extends BankMetadata {
   activeOfferCount: number;

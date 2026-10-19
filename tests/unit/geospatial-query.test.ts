@@ -1,7 +1,7 @@
 import { OfferRepository } from '../../src/modules/offers/offer.repository';
-import { db } from '../../src/database/db-client';
+import { db } from '../../src/infrastructure/db/db-client';
 
-jest.mock('../../src/database/db-client', () => ({
+jest.mock('../../src/infrastructure/db/db-client', () => ({
   db: {
     query: jest.fn(),
   },

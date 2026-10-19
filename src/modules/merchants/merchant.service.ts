@@ -1,5 +1,5 @@
 import { MerchantRepository, MerchantSummaryDto } from './merchant.repository';
-import { AppError } from '../../middleware/error-handler';
+import { AppError } from '../../shared/middleware/error-handler';
 import { ERROR_CODES } from '../../config/constants';
 
 export class MerchantService {
