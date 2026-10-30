@@ -6,6 +6,8 @@ export class BankController {
 
   public async getBanks(_req: Request, res: Response): Promise<void> {
     const banks = await this.service.getBanks();
+    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600');
+    res.setHeader('Vary', 'Accept-Encoding, Origin');
     res.json(banks);
   }
 }

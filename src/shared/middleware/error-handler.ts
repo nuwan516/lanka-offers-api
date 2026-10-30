@@ -44,5 +44,6 @@ export function errorHandler(
     },
   };
 
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.status(statusCode).json(payload);
 }

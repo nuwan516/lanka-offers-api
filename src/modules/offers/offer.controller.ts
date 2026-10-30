@@ -17,6 +17,7 @@ export class OfferController {
       offset: offset ? parseInt(offset as string, 10) : undefined,
     });
 
+    res.setHeader('Cache-Control', 'no-store');
     res.json(result);
   }
 
@@ -40,12 +41,14 @@ export class OfferController {
       offset: offset ? parseInt(offset as string, 10) : undefined,
     });
 
+    res.setHeader('Cache-Control', 'no-store');
     res.json(result);
   }
 
   public async getOfferById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
     const offer = await this.service.getPublishedOfferById(id);
+    res.setHeader('Cache-Control', 'no-store');
     res.json(offer);
   }
 }

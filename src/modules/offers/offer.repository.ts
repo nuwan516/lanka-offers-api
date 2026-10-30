@@ -95,7 +95,7 @@ export class OfferRepository {
       SELECT ${PUBLIC_SUMMARY_COLUMNS}
       FROM offers
       ${whereSql}
-      ORDER BY updated_at DESC
+      ORDER BY updated_at DESC, id ASC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
 

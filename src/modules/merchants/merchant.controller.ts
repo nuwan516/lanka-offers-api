@@ -10,12 +10,16 @@ export class MerchantController {
 
   public async getMerchants(_req: Request, res: Response): Promise<void> {
     const merchants = await this.service.getMerchants();
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
+    res.setHeader('Vary', 'Accept-Encoding, Origin');
     res.json(merchants);
   }
 
   public async getMerchantByName(req: Request, res: Response): Promise<void> {
     const { name } = req.params;
     const merchant = await this.service.getMerchantByName(name);
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=120');
+    res.setHeader('Vary', 'Accept-Encoding, Origin');
     res.json(merchant);
   }
 
@@ -31,6 +35,8 @@ export class MerchantController {
       offset: offset ? parseInt(offset as string, 10) : undefined,
     });
 
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=30');
+    res.setHeader('Vary', 'Accept-Encoding, Origin');
     res.json(result);
   }
 }
