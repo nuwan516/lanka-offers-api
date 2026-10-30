@@ -14,9 +14,13 @@ const PUBLIC_SUMMARY_COLUMNS = `
   discount_percentage, valid_from, valid_to, card_eligibility,
   geo_locations, geo_status, db_status,
   COALESCE(
+    description,
     SUBSTRING(raw_offer->'offer'->>'description' FROM 1 FOR 200),
     title
   ) AS description,
+  COALESCE(terms, raw_offer->'offer'->>'terms') AS terms,
+  min_spend, max_discount, max_bill_value, installment_plans,
+  recurrence, booking_required, booking_phone, pdf_terms_url, image_url,
   created_at, updated_at
 `;
 
@@ -26,10 +30,13 @@ const PUBLIC_DETAIL_COLUMNS = `
   discount_percentage, valid_from, valid_to, card_eligibility,
   geo_locations, geo_status, raw_offer, db_status,
   COALESCE(
+    description,
     raw_offer->'offer'->>'description',
     title
   ) AS description,
-  raw_offer->'offer'->>'terms' AS terms,
+  COALESCE(terms, raw_offer->'offer'->>'terms') AS terms,
+  min_spend, max_discount, max_bill_value, installment_plans,
+  recurrence, booking_required, booking_phone, pdf_terms_url, image_url,
   created_at, updated_at
 `;
 
