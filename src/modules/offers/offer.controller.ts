@@ -17,6 +17,9 @@ export class OfferController {
       offset: offset ? parseInt(offset as string, 10) : undefined,
     });
 
+    // Caching policy: immediate withdrawal freshness (no-store).
+    // Edge specification: public, max-age=30, s-maxage=60, stale-while-revalidate=30
+    res.setHeader('Cache-Control', 'no-store');
     res.json(result);
   }
 
@@ -40,12 +43,15 @@ export class OfferController {
       offset: offset ? parseInt(offset as string, 10) : undefined,
     });
 
+    res.setHeader('Cache-Control', 'no-store');
     res.json(result);
   }
 
   public async getOfferById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
     const offer = await this.service.getPublishedOfferById(id);
+    // Edge specification: public, max-age=15, s-maxage=30, stale-while-revalidate=15
+    res.setHeader('Cache-Control', 'no-store');
     res.json(offer);
   }
 }

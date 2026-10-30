@@ -16,6 +16,20 @@ export interface GeoLocationDto {
   confidence?: number;
 }
 
+export interface InstallmentPlanDto {
+  months: number;
+  interestRate?: number;
+  minAmount?: number;
+  handlingFee?: number | null;
+  description?: string;
+}
+
+export interface RecurrenceDto {
+  type?: string;
+  days?: string[];
+  description?: string;
+}
+
 export interface PublicOfferSummary {
   id: string;
   unique_id: string;
@@ -36,6 +50,16 @@ export interface PublicOfferSummary {
   geo_status: string | null;
   db_status: 'PUBLISHED';
   description?: string | null;
+  terms?: string | null;
+  min_spend?: number | null;
+  max_discount?: number | null;
+  max_bill_value?: number | null;
+  installment_plans?: InstallmentPlanDto[];
+  recurrence?: RecurrenceDto | null;
+  booking_required?: boolean;
+  booking_phone?: string | null;
+  pdf_terms_url?: string | null;
+  image_url?: string | null;
   distance_km?: number | null;
   matched_branch_name?: string | null;
   matched_branch_address?: string | null;
@@ -44,7 +68,6 @@ export interface PublicOfferSummary {
 }
 
 export interface PublicOfferDetail extends PublicOfferSummary {
-  terms?: string | null;
   raw_offer?: Record<string, unknown>;
 }
 
