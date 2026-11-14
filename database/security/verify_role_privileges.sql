@@ -96,6 +96,20 @@ SELECT
   CASE WHEN has_table_privilege('lanka_offers_public_api', 'public.geo_cache', 'INSERT') = false THEN 'PASS' ELSE 'FAIL' END
 UNION ALL
 SELECT
+  'table: public.locations',
+  'SELECT',
+  has_table_privilege('lanka_offers_public_api', 'public.locations', 'SELECT'),
+  true,
+  CASE WHEN has_table_privilege('lanka_offers_public_api', 'public.locations', 'SELECT') = true THEN 'PASS' ELSE 'FAIL' END
+UNION ALL
+SELECT
+  'table: public.locations',
+  'INSERT',
+  has_table_privilege('lanka_offers_public_api', 'public.locations', 'INSERT'),
+  false,
+  CASE WHEN has_table_privilege('lanka_offers_public_api', 'public.locations', 'INSERT') = false THEN 'PASS' ELSE 'FAIL' END
+UNION ALL
+SELECT
   'table: public.bank_parser_rules',
   'SELECT',
   has_table_privilege('lanka_offers_public_api', 'public.bank_parser_rules', 'SELECT'),

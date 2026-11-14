@@ -33,7 +33,8 @@ Create a production `.env` file in the deployment root (ensure permissions are `
 ```bash
 PORT=3001
 NODE_ENV=production
-DATABASE_URL="postgres://user:password@ep-something.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_PUBLIC_URL="postgres://lanka_offers_public_api:password@ep-something.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL="postgres://neondb_owner:password@ep-something.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
 CORS_ORIGINS="https://lanka-offers.me,https://www.lanka-offers.me"
 LOG_LEVEL=info
 ```
@@ -43,7 +44,8 @@ LOG_LEVEL=info
 |---|---|---|
 | `PORT` | Local port to bind the HTTP server | `3001` |
 | `NODE_ENV` | Runtime environment (`production` or `development`) | `production` |
-| `DATABASE_URL` | Neon PostgreSQL pooled connection string | `postgres://...@ep-...neon.tech/neondb?sslmode=require` |
+| `DATABASE_PUBLIC_URL` | Neon PostgreSQL connection string with restricted role `lanka_offers_public_api` (**STRICTLY REQUIRED in production**) | `postgres://lanka_offers_public_api:...` |
+| `DATABASE_URL` | Fallback or administrative Neon PostgreSQL pooled connection string | `postgres://...@ep-...neon.tech/neondb?sslmode=require` |
 | `CORS_ORIGINS` | Comma-delimited list of allowed web origins | `https://lanka-offers.me` |
 | `LOG_LEVEL` | Minimum log severity level | `info` |
 

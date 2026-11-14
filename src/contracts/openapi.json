@@ -177,6 +177,10 @@
           "geo_locations": { "type": "array", "items": { "$ref": "#/components/schemas/GeoLocation" } },
           "geo_status": { "type": ["string", "null"] },
           "db_status": { "type": "string", "enum": ["PUBLISHED"] },
+          "image_url": {
+            "type": ["string", "null"],
+            "description": "Public API-relative URL for the approved, content-addressed image"
+          },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }

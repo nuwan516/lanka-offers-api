@@ -7,6 +7,8 @@ import {
   PublicOfferDetail,
   PublicOfferSummary,
 } from './offer.types';
+import { getCachedNearby, setCachedNearby } from '../../infrastructure/cache/nearby-cache';
+import { buildNearbyOffersQuery } from './nearby-query';
 
 const PUBLIC_SUMMARY_COLUMNS = `
   id, unique_id, bank, source_url, title, category, card_type,
@@ -46,7 +48,7 @@ export class OfferRepository {
   ): Promise<PaginatedResult<PublicOfferSummary>> {
     const conditions: string[] = [
       "db_status = 'PUBLISHED'",
-      "(valid_to IS NULL OR valid_to >= CURRENT_DATE)",
+      '(valid_to IS NULL OR valid_to >= CURRENT_DATE)',
     ];
     const params: unknown[] = [];
     let paramIndex = 1;
@@ -80,7 +82,6 @@ export class OfferRepository {
       params.push(merchantClean, `%${merchantClean}%`);
       paramIndex += 2;
     }
-
 
     if (options.search) {
       conditions.push(
@@ -125,6 +126,10 @@ export class OfferRepository {
     };
   }
 
+  /**
+   * Nearby discovery via legacy `locations` + PostGIS GIST.
+   * SQL lives in nearby-query.ts; optional Redis cache wraps the result.
+   */
   public async findNearbyOffers(
     options: NearbyOffersQueryOptions
   ): Promise<PaginatedResult<PublicOfferSummary>> {
@@ -135,176 +140,28 @@ export class OfferRepository {
     );
     const offset = Math.max(options.offset ?? PAGINATION.DEFAULT_OFFSET, 0);
 
-    const conditions: string[] = [
-      "o.db_status = 'PUBLISHED'",
-      "(o.valid_to IS NULL OR o.valid_to >= CURRENT_DATE)",
-      "o.geo_locations IS NOT NULL",
-      "jsonb_typeof(o.geo_locations) = 'array'",
-      "jsonb_array_length(o.geo_locations) > 0",
-    ];
+    const cacheOpts = { ...options, radius, limit, offset };
+    const cached = await getCachedNearby(cacheOpts);
+    if (cached) return cached;
 
-    if (options.includeNationwide) {
-      conditions.push("(o.location_scope IS NULL OR o.location_scope NOT IN ('ONLINE', 'UNRESOLVED'))");
-    } else {
-      conditions.push("(o.location_scope IS NULL OR o.location_scope NOT IN ('ONLINE', 'UNRESOLVED', 'NATIONWIDE'))");
-    }
+    const { sql, params } = buildNearbyOffersQuery(options, radius, limit, offset);
+    const dataRes = await db.query<PublicOfferSummary & { total_count: number }>(sql, params);
 
-    const params: unknown[] = [options.lat, options.lng, radius];
-    let paramIndex = 4;
-
-    if (options.bank) {
-      conditions.push(`o.bank = $${paramIndex++}`);
-      params.push(options.bank.toLowerCase());
-    }
-
-    if (options.category) {
-      conditions.push(`o.category ILIKE $${paramIndex++}`);
-      params.push(options.category);
-    }
-
-    if (options.search) {
-      conditions.push(
-        `(o.title ILIKE $${paramIndex} OR o.merchant_name ILIKE $${paramIndex} OR o.canonical_merchant ILIKE $${paramIndex})`
-      );
-      params.push(`%${options.search}%`);
-      paramIndex++;
-    }
-
-    const whereSql = `WHERE ${conditions.join(' AND ')}`;
-
-    const dataSql = `
-      WITH valid_branches AS (
-        SELECT 
-          o.id, o.unique_id, o.bank, o.source_url, o.title, o.category, o.card_type,
-          o.merchant_name, o.merchant_location, o.canonical_merchant, o.location_scope,
-          o.discount_percentage, o.valid_from, o.valid_to, o.card_eligibility,
-          o.geo_locations, o.geo_status, o.db_status, o.created_at, o.updated_at,
-          COALESCE(
-            SUBSTRING(o.raw_offer->'offer'->>'description' FROM 1 FOR 200),
-            o.title
-          ) AS description,
-          loc->>'name' AS branch_name,
-          loc->>'address' AS branch_address,
-          CASE 
-            WHEN jsonb_typeof(loc) = 'object' 
-              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-            THEN (loc->>'lat')::float
-            ELSE NULL
-          END AS branch_lat,
-          CASE 
-            WHEN jsonb_typeof(loc) = 'object' 
-              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-            THEN (loc->>'lng')::float
-            ELSE NULL
-          END AS branch_lng
-        FROM offers o,
-        jsonb_array_elements(o.geo_locations) AS loc
-        ${whereSql}
-      ),
-      bounded_branches AS (
-        SELECT *,
-          (
-            6371 * acos(
-              least(1.0, greatest(-1.0,
-                cos(radians($1)) * cos(radians(branch_lat)) *
-                cos(radians(branch_lng) - radians($2)) +
-                sin(radians($1)) * sin(radians(branch_lat))
-              ))
-            )
-          ) AS dist_km
-        FROM valid_branches
-        WHERE branch_lat IS NOT NULL
-          AND branch_lng IS NOT NULL
-          AND branch_lat BETWEEN -90.0 AND 90.0
-          AND branch_lng BETWEEN -180.0 AND 180.0
-          AND branch_lat BETWEEN ($1 - ($3 / 111.0)) AND ($1 + ($3 / 111.0))
-          AND branch_lng BETWEEN ($2 - ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
-                             AND ($2 + ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
-      ),
-      nearest_per_offer AS (
-        SELECT DISTINCT ON (id)
-          id, unique_id, bank, source_url, title, category, card_type,
-          merchant_name, merchant_location, canonical_merchant, location_scope,
-          discount_percentage, valid_from, valid_to, card_eligibility,
-          geo_locations, geo_status, db_status, description, created_at, updated_at,
-          ROUND(dist_km::numeric, 1)::float AS distance_km,
-          branch_name AS matched_branch_name,
-          branch_address AS matched_branch_address
-        FROM bounded_branches
-        WHERE dist_km <= $3
-        ORDER BY id, dist_km ASC
-      )
-      SELECT *
-      FROM nearest_per_offer
-      ORDER BY distance_km ASC, id ASC
-      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
-    `;
-
-    const countSql = `
-      WITH valid_branches AS (
-        SELECT 
-          o.id,
-          CASE 
-            WHEN jsonb_typeof(loc) = 'object' 
-              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-            THEN (loc->>'lat')::float
-            ELSE NULL
-          END AS branch_lat,
-          CASE 
-            WHEN jsonb_typeof(loc) = 'object' 
-              AND (loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-              AND (loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'
-            THEN (loc->>'lng')::float
-            ELSE NULL
-          END AS branch_lng
-        FROM offers o,
-        jsonb_array_elements(o.geo_locations) AS loc
-        ${whereSql}
-      ),
-      bounded_branches AS (
-        SELECT id,
-          (
-            6371 * acos(
-              least(1.0, greatest(-1.0,
-                cos(radians($1)) * cos(radians(branch_lat)) *
-                cos(radians(branch_lng) - radians($2)) +
-                sin(radians($1)) * sin(radians(branch_lat))
-              ))
-            )
-          ) AS dist_km
-        FROM valid_branches
-        WHERE branch_lat IS NOT NULL
-          AND branch_lng IS NOT NULL
-          AND branch_lat BETWEEN -90.0 AND 90.0
-          AND branch_lng BETWEEN -180.0 AND 180.0
-          AND branch_lat BETWEEN ($1 - ($3 / 111.0)) AND ($1 + ($3 / 111.0))
-          AND branch_lng BETWEEN ($2 - ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
-                             AND ($2 + ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))
-      )
-      SELECT COUNT(DISTINCT id)::int AS count
-      FROM bounded_branches
-      WHERE dist_km <= $3
-    `;
-
-    const [dataRes, countRes] = await Promise.all([
-      db.query<PublicOfferSummary>(dataSql, [...params, limit, offset]),
-      db.query<{ count: number }>(countSql, params),
-    ]);
-
-    return {
-      items: dataRes.rows,
-      total: countRes.rows[0]?.count ?? 0,
+    const result: PaginatedResult<PublicOfferSummary> = {
+      items: dataRes.rows.map(({ total_count: _total, ...row }) => row),
+      total: dataRes.rows[0]?.total_count ?? 0,
       limit,
       offset,
     };
+
+    await setCachedNearby(cacheOpts, result);
+    return result;
   }
 
   public async findPublishedOfferById(idOrUniqueId: string): Promise<PublicOfferDetail | null> {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrUniqueId);
-    
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrUniqueId);
+
     const condition = isUuid ? 'id = $1' : 'unique_id = $1';
 
     const sql = `

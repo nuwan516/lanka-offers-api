@@ -49,6 +49,8 @@ REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM lanka_offers_public_ap
 -- (Derived directly from queries in OfferRepository, MerchantRepository, BankService)
 GRANT SELECT ON TABLE public.offers TO lanka_offers_public_api;
 GRANT SELECT ON TABLE public.geo_cache TO lanka_offers_public_api;
+-- Legacy production nearby: PostGIS GIST on locations.geography
+GRANT SELECT ON TABLE public.locations TO lanka_offers_public_api;
 
 -- Step 5: Explicitly deny any mutation permissions (defense in depth)
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER 

@@ -28,7 +28,40 @@ jobs:
             git reset --hard origin/main
             npm install
             npm run build
-            pm2 restart lanka-offers-api || pm2 start dist/app/server.js --name lanka-offers-api
+
+            # Ensure DATABASE_PUBLIC_URL is defined in .env for production fail-closed security
+            if [ -f .env ] && ! grep -q "^DATABASE_PUBLIC_URL=" .env; then
+              echo "[DEPLOY] Setting DATABASE_PUBLIC_URL in .env from DATABASE_URL for compatibility..."
+              DB_URL=$(grep "^DATABASE_URL=" .env | cut -d '=' -f2-)
+              if [ -n "$DB_URL" ]; then
+                echo "" >> .env
+                echo "DATABASE_PUBLIC_URL=$DB_URL" >> .env
+              fi
+            fi
+
+            # Restart PM2 with updated environment variables
+            pm2 restart lanka-offers-api --update-env || pm2 start dist/app/server.js --name lanka-offers-api
             pm2 save
-            sleep 2
-            curl -f -s http://127.0.0.1:3001/api/health
+
+            # Poll health endpoint with timeout and diagnostic output on failure
+            echo "Waiting for API to become ready..."
+            HEALTHY=0
+            for i in $(seq 1 15); do
+              if curl -f -s -S http://127.0.0.1:3001/api/health; then
+                echo ""
+                echo "Deployment verified: Health check passed on attempt $i."
+                HEALTHY=1
+                break
+              fi
+              echo "Attempt $i/15: waiting for API (sleep 1s)..."
+              sleep 1
+            done
+
+            if [ "$HEALTHY" -ne 1 ]; then
+              echo "=== DEPLOYMENT FAILED: Health check timed out ==="
+              echo "--- PM2 Process Status ---"
+              pm2 status
+              echo "--- PM2 Error Logs (last 50 lines) ---"
+              pm2 logs lanka-offers-api --lines 50 --nostream
+              exit 1
+            fi
