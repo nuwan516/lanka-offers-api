@@ -15,7 +15,8 @@ To follow the Principle of Least Privilege and protect the production database f
 | `neondb` (Database) | `CONNECT` | Connection establishment |
 | `public` (Schema) | `USAGE` | Resolving table names |
 | `public.offers` | `SELECT` | Reading published offer details |
-| `public.geo_cache` | `SELECT` | Reading cached geocodes |
+| `public.geo_cache` | `SELECT` | Reading cached geocodes (rewrite schema only) |
+| `public.locations` | `SELECT` | Legacy PostGIS nearby discovery (GIST on geography) |
 | All other tables (`scrape_runs`, `validation_reports`, `offer_review_history`, `external_api_usage`, etc.) | **NO ACCESS** | Internal operational data isolated |
 | Any table | **NO INSERT / UPDATE / DELETE / TRUNCATE** | Zero mutation capabilities |
 
@@ -37,7 +38,7 @@ FROM information_schema.role_table_grants
 WHERE grantee = 'lanka_offers_public_api'
 ORDER BY table_name, privilege_type;
 ```
-Ensure only `SELECT` on `offers` and `geo_cache` appears.
+Ensure `SELECT` on `offers` and `locations` appears (plus `geo_cache` if present).
 
 ### Step 3: Update `backend-api/.env`
 Update the `DATABASE_URL` in `backend-api/.env` with the new role credentials:

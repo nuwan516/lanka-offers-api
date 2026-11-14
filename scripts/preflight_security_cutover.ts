@@ -218,6 +218,8 @@ async function runPreflight() {
               has_table_privilege('lanka_offers_public_api', 'public.offers', 'DELETE') AS del_offers,
               has_table_privilege('lanka_offers_public_api', 'public.geo_cache', 'SELECT') AS sel_geo,
               has_table_privilege('lanka_offers_public_api', 'public.geo_cache', 'INSERT') AS ins_geo,
+              has_table_privilege('lanka_offers_public_api', 'public.locations', 'SELECT') AS sel_locations,
+              has_table_privilege('lanka_offers_public_api', 'public.locations', 'INSERT') AS ins_locations,
               has_table_privilege('lanka_offers_public_api', 'public.bank_parser_rules', 'SELECT') AS sel_rules,
               has_table_privilege('lanka_offers_public_api', 'public.internal_audit', 'SELECT') AS sel_audit,
               has_schema_privilege('lanka_offers_public_api', 'public', 'USAGE') AS schema_usage,
@@ -233,6 +235,8 @@ async function runPreflight() {
             p.del_offers === false &&
             p.sel_geo === true &&
             p.ins_geo === false &&
+            p.sel_locations === true &&
+            p.ins_locations === false &&
             p.sel_rules === false &&
             p.sel_audit === false &&
             p.schema_usage === true &&
@@ -245,7 +249,7 @@ async function runPreflight() {
               check: 'Catalog Privilege Boundaries',
               status: 'PASS',
               details:
-                '100% compliant: SELECT granted on offers & geo_cache; writes and sensitive table access strictly denied.',
+                '100% compliant: SELECT granted on offers, geo_cache & locations; writes and sensitive table access strictly denied.',
             });
           } else {
             items.push({

@@ -208,7 +208,7 @@ async function runPostCutoverVerification() {
     });
   }
 
-  // 5. Nearby Discovery Endpoint (Haversine & Bounding-Box)
+  // 5. Nearby Discovery Endpoint (PostGIS ST_DWithin on offer_branches)
   try {
     const nearbyRes = await fetchJson(`${baseUrl}/api/offers/nearby?lat=6.9271&lng=79.8612&radius=10`);
     if (nearbyRes.status === 200 && nearbyRes.body && Array.isArray(nearbyRes.body.data)) {
