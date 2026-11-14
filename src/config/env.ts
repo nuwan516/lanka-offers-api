@@ -14,6 +14,13 @@ export interface AppConfig {
   isDesignatedPublicUrl: boolean;
   corsOrigins: string[];
   logLevel: string;
+  imageStorageDir: string;
+  /** Optional Redis URL for nearby-offers response caching. */
+  redisUrl: string | null;
+  /** Nearby cache TTL in seconds (default 420 = 7 minutes). */
+  nearbyCacheTtlSeconds: number;
+  /** Bump to logically flush nearby keys without SCAN/DEL. */
+  nearbyCacheVersion: string;
 }
 
 export class ConfigurationError extends Error {
@@ -98,6 +105,11 @@ const resolvedDbConfig = resolveDatabaseConfig(
   process.env.DATABASE_URL
 );
 
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const n = raw ? parseInt(raw, 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 export const config: AppConfig = {
   env: currentEnv,
   port: parseInt(process.env.PORT || '3001', 10),
@@ -107,4 +119,9 @@ export const config: AppConfig = {
     ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
     : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'],
   logLevel: process.env.LOG_LEVEL || 'info',
+  imageStorageDir: process.env.IMAGE_STORAGE_DIR || 'data/images',
+  redisUrl: process.env.REDIS_URL?.trim() || null,
+  // 5–10 minute window; default 7 minutes balances freshness vs scrape publish lag.
+  nearbyCacheTtlSeconds: Math.min(Math.max(parsePositiveInt(process.env.NEARBY_CACHE_TTL_SECONDS, 420), 60), 3600),
+  nearbyCacheVersion: process.env.NEARBY_CACHE_VERSION?.trim() || '1',
 };

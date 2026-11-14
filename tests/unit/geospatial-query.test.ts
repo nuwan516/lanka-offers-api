@@ -7,7 +7,12 @@ jest.mock('../../src/infrastructure/db/db-client', () => ({
   },
 }));
 
-describe('Geospatial Query Correctness & Robustness (Batch A)', () => {
+jest.mock('../../src/infrastructure/cache/nearby-cache', () => ({
+  getCachedNearby: jest.fn().mockResolvedValue(null),
+  setCachedNearby: jest.fn().mockResolvedValue(undefined),
+}));
+
+describe('Geospatial Query Correctness (legacy locations + PostGIS GIST)', () => {
   let repository: OfferRepository;
 
   beforeEach(() => {
@@ -15,140 +20,131 @@ describe('Geospatial Query Correctness & Robustness (Batch A)', () => {
     jest.clearAllMocks();
   });
 
-  describe('A1: Bounding-box and Latitude/Longitude Calculations', () => {
-    it('uses mathematically correct cosine-scaled longitude bounding box to prevent exclusion at non-equatorial latitudes', async () => {
-      (db.query as jest.Mock)
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ count: 0 }] });
+  describe('A1: PostGIS ST_DWithin on locations.geography', () => {
+    it('uses ST_DWithin on locations.geography and does not use offer_branches / Haversine / bbox', async () => {
+      (db.query as jest.Mock).mockResolvedValueOnce({ rows: [] });
 
       await repository.findNearbyOffers({
-        lat: 6.9271, // Colombo latitude
+        lat: 6.9271,
         lng: 79.8612,
         radius: 20,
       });
 
       const [dataCall] = (db.query as jest.Mock).mock.calls;
-      const sql = dataCall[0];
+      const sql = dataCall[0] as string;
 
-      // Verifies latitude delta uses 111.0 km/deg
-      expect(sql).toContain('branch_lat BETWEEN ($1 - ($3 / 111.0)) AND ($1 + ($3 / 111.0))');
-
-      // Verifies longitude delta dynamically scales by cosine of latitude with clamp to avoid division by zero
-      expect(sql).toContain(
-        'branch_lng BETWEEN ($2 - ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))'
-      );
-      expect(sql).toContain(
-        'AND ($2 + ($3 / (111.0 * greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1))))))))'
-      );
+      expect(sql).toContain('ST_DWithin(l.geography');
+      expect(sql).toContain('ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography');
+      expect(sql).toContain('$3 * 1000.0');
+      expect(sql).toContain('FROM locations l');
+      expect(sql).toContain('o.is_in_production = true');
+      expect(sql).toContain("o.status = 'active'");
+      expect(sql).not.toContain('offer_branches');
+      expect(sql).not.toContain('6371 * acos');
+      expect(sql).not.toContain('jsonb_array_elements');
+      expect(sql).not.toContain('branch_lat BETWEEN ($1 - ($3 / 111.0))');
+      // Response aliases db_status='PUBLISHED'; filter uses legacy is_in_production.
+      expect(sql).not.toContain('o.db_status');
+      expect(sql).toContain("'PUBLISHED'::text AS db_status");
     });
   });
 
-  describe('A2: SQL Casting Safety & Malformed Coordinate Defense', () => {
-    it('guards lat and lng parsing using sequential CASE statements and strict regex to prevent planner casting errors', async () => {
-      (db.query as jest.Mock)
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ count: 0 }] });
+  describe('A2: Shared list+count CTE', () => {
+    it('returns total via COUNT(*) OVER in a single query', async () => {
+      (db.query as jest.Mock).mockResolvedValueOnce({
+        rows: [{ id: 'offer-1', distance_km: 1.2, total_count: 3 }],
+      });
 
-      await repository.findNearbyOffers({
-        lat: 7.2906, // Kandy latitude
+      const result = await repository.findNearbyOffers({
+        lat: 7.2906,
         lng: 80.6337,
         radius: 10,
       });
 
-      const [dataCall, countCall] = (db.query as jest.Mock).mock.calls;
-      const dataSql = dataCall[0];
-      const countSql = countCall[0];
+      expect(db.query).toHaveBeenCalledTimes(1);
+      expect(result.total).toBe(3);
+      expect(result.items).toHaveLength(1);
+      expect((result.items[0] as { total_count?: number }).total_count).toBeUndefined();
 
-      // Both dataSql and countSql must guard against non-object loc elements
-      expect(dataSql).toContain("jsonb_typeof(loc) = 'object'");
-      expect(countSql).toContain("jsonb_typeof(loc) = 'object'");
-
-      // Regex must only allow 1 to 3 integer digits, preventing huge number overflows like 1e500
-      expect(dataSql).toContain("(loc->>'lat') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'");
-      expect(dataSql).toContain("(loc->>'lng') ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$'");
-
-      // Verify coordinate range guards
-      expect(dataSql).toContain('branch_lat BETWEEN -90.0 AND 90.0');
-      expect(dataSql).toContain('branch_lng BETWEEN -180.0 AND 180.0');
-
-      // Verify array type check on geo_locations
-      expect(dataSql).toContain("jsonb_typeof(o.geo_locations) = 'array'");
+      const sql = (db.query as jest.Mock).mock.calls[0][0] as string;
+      expect(sql).toContain('COUNT(*) OVER()::int AS total_count');
     });
   });
 
-  describe('A3: Multi-branch Distance Handling & Deterministic Output', () => {
-    it('uses DISTINCT ON (id) to select the single closest branch and preserves branch name and address', async () => {
-      const mockRows = [
-        {
-          id: 'offer-keells-1',
-          unique_id: 'combank-keells-super',
-          title: '20% off at Keells Super',
-          distance_km: 0.8,
-          matched_branch_name: 'Keells Colombo 3',
-          matched_branch_address: 'Galle Road, Kollupitiya',
-        },
-      ];
-
-      (db.query as jest.Mock)
-        .mockResolvedValueOnce({ rows: mockRows })
-        .mockResolvedValueOnce({ rows: [{ count: 1 }] });
+  describe('A3: Multi-branch handling & filters', () => {
+    it('uses DISTINCT ON (id) for nearest location and preserves matched branch fields', async () => {
+      (db.query as jest.Mock).mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'offer-keells-1',
+            unique_id: 'combank-keells-super',
+            title: '20% off at Keells Super',
+            distance_km: 0.8,
+            matched_branch_name: 'Keells Colombo 3',
+            matched_branch_address: 'Galle Road, Kollupitiya',
+            total_count: 1,
+          },
+        ],
+      });
 
       const result = await repository.findNearbyOffers({
         lat: 6.9147,
-        lng: 79.8540,
+        lng: 79.854,
         radius: 5,
       });
 
-      expect(result.items).toHaveLength(1);
-      expect(result.items[0].id).toBe('offer-keells-1');
-      expect(result.items[0].distance_km).toBe(0.8);
       expect(result.items[0].matched_branch_name).toBe('Keells Colombo 3');
       expect(result.items[0].matched_branch_address).toBe('Galle Road, Kollupitiya');
 
-      const dataSql = (db.query as jest.Mock).mock.calls[0][0];
-
-      // DISTINCT ON (id) ensures each offer appears only once, picking nearest branch
+      const dataSql = (db.query as jest.Mock).mock.calls[0][0] as string;
       expect(dataSql).toContain('DISTINCT ON (id)');
       expect(dataSql).toContain('ORDER BY id, dist_km ASC');
-
-      // Matched branch properties extracted
       expect(dataSql).toContain('branch_name AS matched_branch_name');
-      expect(dataSql).toContain('branch_address AS matched_branch_address');
-
-      // Final sorting has deterministic tie-breaker (distance_km ASC, id ASC)
       expect(dataSql).toContain('ORDER BY distance_km ASC, id ASC');
     });
 
-    it('enforces exclusion of ONLINE and UNRESOLVED offers from nearby physical discovery', async () => {
-      (db.query as jest.Mock)
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ count: 0 }] });
+    it('filters bank via LOWER(offers.source) for legacy uppercase bank codes', async () => {
+      (db.query as jest.Mock).mockResolvedValueOnce({ rows: [] });
 
       await repository.findNearbyOffers({
-        lat: 6.0535, // Galle latitude
-        lng: 80.2210,
+        lat: 6.9271,
+        lng: 79.8612,
+        bank: 'hnb',
+      });
+
+      const [sql, params] = (db.query as jest.Mock).mock.calls[0];
+      expect(sql).toContain('LOWER(o.source) = $4');
+      expect(params).toEqual([6.9271, 79.8612, 25, 'hnb', 50, 0]);
+    });
+
+    it('does not reference rewrite location_scope filters (legacy has none)', async () => {
+      (db.query as jest.Mock).mockResolvedValueOnce({ rows: [] });
+
+      await repository.findNearbyOffers({
+        lat: 6.0535,
+        lng: 80.221,
         radius: 25,
         includeNationwide: false,
       });
 
-      const dataSql = (db.query as jest.Mock).mock.calls[0][0];
-      expect(dataSql).toContain("o.location_scope NOT IN ('ONLINE', 'UNRESOLVED', 'NATIONWIDE')");
+      const dataSql = (db.query as jest.Mock).mock.calls[0][0] as string;
+      expect(dataSql).not.toContain('o.location_scope NOT IN');
+      expect(dataSql).not.toContain("'NATIONWIDE'");
     });
 
-    it('safely clamps latitude between -89.0 and 89.0 degrees to prevent division by zero near poles (E1)', async () => {
-      (db.query as jest.Mock)
-        .mockResolvedValueOnce({ rows: [] })
-        .mockResolvedValueOnce({ rows: [{ count: 0 }] });
+    it('relies on geography spheroid math (no polar cos clamp)', async () => {
+      (db.query as jest.Mock).mockResolvedValueOnce({ rows: [] });
 
       await repository.findNearbyOffers({
-        lat: 89.5, // Extreme high latitude edge case
+        lat: 89.5,
         lng: 0.0,
         radius: 50,
       });
 
-      const dataSql = (db.query as jest.Mock).mock.calls[0][0];
-      expect(dataSql).toContain('least(89.0, greatest(-89.0, $1))');
-      expect(dataSql).toContain('greatest(0.01, cos(radians(least(89.0, greatest(-89.0, $1)))))');
+      const dataSql = (db.query as jest.Mock).mock.calls[0][0] as string;
+      expect(dataSql).not.toContain('least(89.0, greatest(-89.0, $1))');
+      expect(dataSql).toContain('ST_DWithin');
+      expect(dataSql).toContain('l.geography');
     });
   });
 });
