@@ -46,37 +46,26 @@ PostgreSQL (`src/infrastructure/db/db-client.ts`)
 ```
 lanka-offers-backend-api/
 ├── src/
-│   ├── app/
-│   │   ├── app.ts                 # Express application factory & middleware chain
-│   │   └── server.ts              # HTTP listener & graceful shutdown handlers
-│   ├── config/
-│   │   ├── constants.ts           # Pagination limits, defaults, cache keys
-│   │   └── env.ts                 # Validated environment configuration
-│   ├── contracts/
-│   │   └── openapi.json           # Authoritative OpenAPI 3.0 contract definition
-│   ├── database/
-│   │   └── db-client.ts           # Neon PostgreSQL connection pool
-│   ├── middleware/
-│   │   ├── correlation-id.ts      # X-Correlation-ID tracing
-│   │   └── error-handler.ts       # Structured consumer error responses
+│   ├── app/                       # Express app factory + HTTP server
+│   ├── config/                    # Env, pagination, constants
+│   ├── contracts/                 # OpenAPI 3.0 contract
+│   ├── infrastructure/
+│   │   ├── cache/                 # Optional Redis nearby cache
+│   │   └── db/                    # Postgres pool (public role)
+│   ├── shared/middleware/         # Correlation ID + error handler
 │   └── modules/
-│       ├── banks/                 # Bank metadata & status
-│       ├── health/                # Liveness & database connection health
-│       ├── merchants/             # Merchant catalog & canonical groupings
-│       └── offers/                # Sanitized consumer offers & single-offer lookup
-├── tests/
-│   ├── unit/                      # Unit tests for repositories & services
-│   ├── integration/               # Integration tests for route controllers
-│   ├── contract/                  # Cross-repository API contract tests
-│   └── smoke/                     # Health check smoke tests
+│       ├── banks/                 # Bank catalog
+│       ├── health/                # Liveness / DB health
+│       ├── images/                # Published content-addressed images
+│       ├── merchants/             # Merchant directory
+│       └── offers/                # List, detail, nearby discovery
+├── database/security/             # Least-privilege role SQL
+├── scripts/                       # Cutover / privilege verification
+├── tests/{unit,integration,contract,smoke}/
 ├── docs/
-│   ├── api.md                     # Endpoint documentation & query parameters
-│   ├── architecture.md            # Structural decisions & invariants
-│   └── deployment.md              # Production deployment & PM2 topology
 ├── .env.example
-├── .gitignore
-├── package.json
-└── tsconfig.json
+├── ecosystem.config.js
+└── package.json
 ```
 
 ---
@@ -131,7 +120,9 @@ lanka-offers-backend-api/
 |---|---|---|
 | `GET` | `/api/health` | Service liveness & database connectivity |
 | `GET` | `/api/offers` | Paginated list of published, valid offers with filtering |
+| `GET` | `/api/offers/nearby` | Nearby offers via PostGIS (`locations` GIST) |
 | `GET` | `/api/offers/:id` | Fetch single published offer by UUID or `unique_id` |
+| `GET` | `/api/images/:key` | Published offer image (content-addressed) |
 | `GET` | `/api/merchants` | List active merchants with published offer counts |
 | `GET` | `/api/banks` | List supported Sri Lankan financial institutions |
 

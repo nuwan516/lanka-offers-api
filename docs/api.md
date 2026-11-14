@@ -87,6 +87,25 @@ Returns 404 if not found or not in `PUBLISHED` status.
 
 ---
 
+### `GET /api/offers/nearby`
+Returns published physical offers near a point, ordered by distance.
+
+**Query Parameters:**
+- `lat` / `lng` (required): WGS84 coordinates
+- `radius`: km (default `25`, clamped `0.5`–`100`)
+- `bank`, `category`, `search`: optional filters
+- `includeNationwide`: `true` to also include `NATIONWIDE` scope offers that have branch points
+- `limit` / `offset`: pagination
+
+**Implementation notes (legacy production):**
+- Joins `locations` with PostGIS `ST_DWithin` / `ST_Distance` on `locations.geography` (GIST `locations_geography_idx`).
+- Does **not** require rewrite tables (`offer_branches`, `geo_locations` JSONB, `db_status`).
+- List + total share one CTE (`COUNT(*) OVER()`); optional Redis cache (`REDIS_URL`, ~100m key rounding).
+
+Response shape matches paginated offers plus `distance_km`, `matched_branch_name`, `matched_branch_address`.
+
+---
+
 ### `GET /api/merchants`
 Returns aggregated directory of canonical merchants with active offer counts.
 
