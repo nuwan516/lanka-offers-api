@@ -7,6 +7,7 @@ import { healthRoutes } from '../modules/health/health.routes';
 import { offerRoutes } from '../modules/offers/offer.routes';
 import { merchantRoutes } from '../modules/merchants/merchant.routes';
 import { bankRoutes } from '../modules/banks/bank.routes';
+import { imageRoutes } from '../modules/images/image.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -33,6 +34,7 @@ export function createApp(): Express {
   app.use('/api', offerRoutes);
   app.use('/api', merchantRoutes);
   app.use('/api', bankRoutes);
+  app.use('/api', imageRoutes);
 
   // 3. Fallback for unhandled routes
   app.use('*', (req, _res, next) => {
